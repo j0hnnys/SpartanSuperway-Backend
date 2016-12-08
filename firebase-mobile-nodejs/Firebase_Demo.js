@@ -9,17 +9,6 @@ var config = {
 };
 firebase.initializeApp(config);
 
-// Sign into account
-var email = "test@email.com";
-var password = "TestEmail12345";
-firebase.auth().signInWithEmailAndPassword(email, password).catch(function(error) {
-    // Handle Errors here.
-    var errorCode = error.code;
-    var errorMessage = error.message;
-    console.log("Error code " + errorCode);
-    console.log("Error message " + errorMessage);
-});
-
 // Get currently logged in user from signed in account
 var user = firebase.auth().currentUser;
 // If we want to access the user's profile information, we do so here.
@@ -37,26 +26,78 @@ if (user != null) {
 // UID for test account
 var userId = "Qvn71YOfXzMdmASoievQBboMEvI3";
 var database = firebase.database();
-//var etaRef = database.ref("users").child(userId).child("currentTicket").child("eta"); 
-//etaRef.on("value", function(snapshot) {
-//    console.log("Snapshot value = " + snapshot.val());
-//}, function (errorObject) {
-//    console.log("The read failed: " + errorObject.code);
-//});
 
+function handleStatusCode(statusRef, currentTicketRef) {
+    
+    var statusCode = statusRef.val();
+    var etaValue = 10;    
+    var etaRef = currentTicketRef.child("eta");
+    var timer = setInterval(function() {
+        etaRef.set(etaValue);
+        if (etaValue == 0) {
+            
+            if (statusCode == 100) {
+                currentTicketRef.child("status").set(300);
+            } else if (statusCode = 300) {
+                currentTicketRef.child("status").set(400);
+            }
+            
+        }
+        etaValue = etaValue - 1;
+    }, 1000);
+    
+}
+
+// statusCode 100 set from app. 100 -> user needs pickup
 var usersRef = database.ref("users")
 usersRef.on("value", function(userSnapshot) {
-
     userSnapshot.forEach(function (snapshot) {
-        var snapshotVal = snapshot.val();
-        var obj = snapshot.child("eta").val();
-        console.log("snapshotVal = " + snapshotVal);
-        console.log("eta = " + obj);
+        
+        // mutable ref for setting data
+        // snapshot for reading data
+        var mutableTicketRef = database.ref("users").child(snapshot.key).child("currentTicket");
+        var mutableEtaRef = mutableTicketRef.child("eta");   
+        var mutableStatusRef = mutableTicketRef.child("status");
+        
+        // Read statusCode from snapshot
+        var statusCode = snapshot.child("currentTicket").child("status").val();
+        if (statusCode === 100 || statusCode === 300) {
+            // If timer is already on, forget it
 
+            var timerOn = snapshot.child("currentTicket").child("timerOn").val();
+            console.log("timerOn = " + timerOn);
+            if (timerOn === "true") {
+                console.log("timer is already on");
+            } else {
+                mutableTicketRef.child("timerOn").set("true");
+                var etaValue = 15;
+                var timer = setInterval(function() {
+                    console.log("starting timer");
+                    // Set eta from mutable ref
+                    if (etaValue == 0) {
+                        
+                        clearInterval(timer);
+                        if (statusCode == 100) {
+                            // Set status from mutable ref
+                            mutableStatusRef.set(200);
+                        } else {
+                            mutableStatusRef.set(400);
+                        }
+                        mutableTicketRef.child("timerOn").set("false");
+                        return;
+                    }
+                    console.log("setting eta value");
+                    mutableEtaRef.set(etaValue);
+                    etaValue = etaValue - 1;
+                }, 1000);
+            }
+        }
+        
     });
 }, function (errorObject) {
     console.log("usersRef snapshot read failed");
 });
+
 
 //var statusRef = database.ref("users").child(userId).child("currentTicket").child("status");
 //var etaValue = 10
